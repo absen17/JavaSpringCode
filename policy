@@ -1,0 +1,188 @@
+// Validator.java
+package com.infy.validator;
+
+import com.infy.exception.InsuranceException;
+import com.infy.model.PolicyDTO;
+
+import java.time.LocalDate;
+import java.util.regex.Pattern;
+
+public class Validator {
+    public static final String INVALID_POLICY_NUMBER = "Policy number is invalid.";
+    public static final String INVALID_HOLDER_NAME = "Policy holder name is invalid.";
+    public static final String INVALID_DOB = "Date of birth is invalid.";
+    public static final String INVALID_POLICY_NAME = "Policy name is invalid.";
+    public static final String INVALID_POLICY_TYPE = "Policy type is invalid.";
+    public static final String INVALID_PREMIUM = "Premium is invalid.";
+    public static final String INVALID_TENURE = "Tenure is invalid.";
+
+    public static void validate(PolicyDTO policy) throws InsuranceException {
+        if (!validatePolicyNumber(policy.getPolicyNumber(), policy.getPolicyType())) {
+            throw new InsuranceException(INVALID_POLICY_NUMBER);
+        }
+        if (!validatePolicyHolderName(policy.getPolicyHolderName())) {
+            throw new InsuranceException(INVALID_HOLDER_NAME);
+        }
+        if (!validateDateOfBirth(policy.getDateOfBirth())) {
+            throw new InsuranceException(INVALID_DOB);
+        }
+        if (!validatePolicyName(policy.getPolicyName())) {
+            throw new InsuranceException(INVALID_POLICY_NAME);
+        }
+        if (!validatePolicyType(policy.getPolicyType())) {
+            throw new InsuranceException(INVALID_POLICY_TYPE);
+        }
+        if (!validatePremium(policy.getPremium())) {
+            throw new InsuranceException(INVALID_PREMIUM);
+        }
+        if (!validateTenure(policy.getTenureInMonths())) {
+            throw new InsuranceException(INVALID_TENURE);
+        }
+    }
+
+    public static boolean validatePolicyName(String policyName) {
+        return Pattern.matches("[a-zA-Z]+", policyName) && !policyName.isEmpty();
+    }
+
+    public static boolean validatePolicyType(String policyType) {
+        return policyType.equals("Term Life Insurance") ||
+               policyType.equals("Whole Life Policy") ||
+               policyType.equals("Endowment Plans");
+    }
+
+    public static boolean validatePremium(Double premium) {
+        return premium > 100;
+    }
+
+    public static boolean validateTenure(Integer tenureInMonths) {
+        return tenureInMonths > 24;
+    }
+
+    public static boolean validateDateOfBirth(LocalDate dateOfBirth) {
+        return dateOfBirth.isBefore(LocalDate.now());
+    }
+
+    public static boolean validatePolicyNumber(String policyNumber, String policyType) {
+        String prefix;
+        switch (policyType) {
+            case "Term Life Insurance":
+                prefix = "TL";
+                break;
+            case "Whole Life Policy":
+                prefix = "WL";
+                break;
+            case "Endowment Plans":
+                prefix = "EP";
+                break;
+            default:
+                return false;
+        }
+        return Pattern.matches(prefix + "-\\d{6}", policyNumber);
+    }
+
+    public static boolean validatePolicyHolderName(String policyHolderName) {
+        return Pattern.matches("([a-zA-Z]+\\s?){3,}", policyHolderName);
+    }
+}
+//======
+// InsuranceServiceImpl.java
+package com.infy.service;
+
+import com.infy.exception.InsuranceException;
+import com.infy.model.PolicyDTO;
+import com.infy.model.PolicyReportDTO;
+import com.infy.repository.InsuranceRepository;
+import com.infy.validator.Validator;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.stream.Collectors;
+
+@Service
+public class InsuranceServiceImpl implements InsuranceService {
+
+    @Autowired
+    private InsuranceRepository insuranceRepository;
+
+    @Override
+    public String buyPolicy(PolicyDTO policy) throws InsuranceException {
+        try {
+            Validator.validate(policy);
+            return insuranceRepository.buyPolicy(policy);
+        } catch (InsuranceException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new InsuranceException("Service.INTERNAL_ERROR");
+        }
+    }
+
+    @Override
+    public Long calculateAge(LocalDate dateOfBirth) {
+        // Implement calculation of age in months
+        return null;
+    }
+
+    @Override
+    public List<PolicyReportDTO> getReport(String policyType) throws InsuranceException {
+        try {
+            List<PolicyDTO> allPolicies = insuranceRepository.getAllPolicyDetails();
+            List<PolicyDTO> filteredPolicies = allPolicies.stream()
+                    .filter(policy -> policy.getPolicyType().equals(policyType))
+                    .collect(Collectors.toList());
+
+            if (filteredPolicies.isEmpty()) {
+                throw new InsuranceException("Service.NO_RECORD");
+            }
+
+            return filteredPolicies.stream()
+                    .map(policy -> {
+                        PolicyReportDTO reportDTO = new PolicyReportDTO();
+                        reportDTO.setPolicyNumber(policy.getPolicyNumber());
+                        reportDTO.setPolicyHolderName(policy.getPolicyHolderName());
+                        reportDTO.setPolicyHolderAge(calculateAge(policy.getDateOfBirth()));
+                        reportDTO.setTenureInMonths(policy.getTenureInMonths());
+                        return reportDTO;
+                    })
+                    .collect(Collectors.toList());
+        } catch (InsuranceException ex) {
+            throw ex;
+        } catch (Exception ex) {
+            throw new InsuranceException("Service.INTERNAL_ERROR");
+        }
+    }
+}
+=========
+// SpringConfig.java
+package com.infy.configuration;
+
+import com.infy.repository.InsuranceRepository;
+import com.infy.repository.InsuranceRepositoryImpl;
+import com.infy.service.InsuranceService;
+import com.infy.service.InsuranceServiceImpl;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class SpringConfig {
+
+    @Bean
+    public InsuranceService insuranceService() {
+        return new InsuranceServiceImpl();
+    }
+
+    @Bean
+    public InsuranceRepository insuranceRepository() {
+        return new InsuranceRepositoryImpl();
+    }
+}
+// ==========
+To complete the calculateAge method in InsuranceServiceImpl to calculate 
+the age of the policy holder in months, you can use the Period class from 
+the java.time package. Here's how you can implement it:
+@Override
+public Long calculateAge(LocalDate dateOfBirth) {
+    LocalDate currentDate = LocalDate.now();
+    return ChronoUnit.MONTHS.between(dateOfBirth, currentDate);
+}
