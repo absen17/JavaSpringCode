@@ -1,0 +1,101 @@
+====Entity Class====
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+
+@Entity
+public class Product {
+    
+    @Id
+    private Long id;
+    private String name;
+    private String vendor;
+    private double price;
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public String getName() {
+		return name;
+	}
+	public void setName(String name) {
+		this.name = name;
+	}
+	public String getVendor() {
+		return vendor;
+	}
+	public void setVendor(String vendor) {
+		this.vendor = vendor;
+	}
+	public double getPrice() {
+		return price;
+	}
+	public void setPrice(double price) {
+		this.price = price;
+	}
+	public Product(Long id, String name, String vendor, double price) {
+		super();
+		this.id = id;
+		this.name = name;
+		this.vendor = vendor;
+		this.price = price;
+	}
+	@Override
+	public String toString() {
+		return "Product [id=" + id + ", name=" + name + ", vendor=" + vendor + ", price=" + price + "]";
+	}
+    
+}
+
+
+====Repo Interface====
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface ProductRepository extends JpaRepository<Product, Long> {
+    
+    List<Product> findByNameContainingAndVendorContaining(String name, String vendor);
+}
+
+
+====Service Class====
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import java.util.List;
+
+@Service
+public class ProductService {
+
+    @Autowired
+    private ProductRepository productRepository;
+
+    public List<Product> getProducts(String productName, String productVendor) {
+        return productRepository.findByNameContainingAndVendorContaining(productName, productVendor);
+    }
+}
+
+====Controller Class====
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import java.util.List;
+
+@RestController
+public class ProductController {
+
+    @Autowired
+    private ProductService productService;
+
+    @GetMapping("/product")
+    public List<Product> getProducts(
+            @RequestParam(required = false) String productName,
+            @RequestParam(required = false) String productVendor) {
+        return productService.getProducts(productName, productVendor);
+    }
+}
