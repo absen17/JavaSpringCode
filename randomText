@@ -1,0 +1,145 @@
+package com.infy.service;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import com.infy.dto.CartItemsDTO;
+import com.infy.dto.ProductDTO;
+import com.infy.entity.CartItems;
+import com.infy.entity.Product;
+import com.infy.entity.User;
+import com.infy.exception.InfyShoppingCartException;
+import com.infy.repository.CartItemsRepository;
+import com.infy.repository.ProductRepository;
+import com.infy.repository.UserRepository;
+
+//Do the required configuration.****
+//Do not add any other extra instance variable or method.****
+@Service(value = "infyShoppingCartService")
+@Transactional
+public class InfyShoppingCartServiceImpl implements InfyShoppingCartService {
+   @Autowired
+   private CartItemsRepository cartItemsRepository;
+   @Autowired
+   private ProductRepository productRepository;
+   @Autowired
+   private UserRepository userRepository;
+
+   @Override
+   public String addProductToCart(Integer userId, String productId) throws InfyShoppingCartException {
+      Optional<User> optional=userRepository.findById(userId);
+      User user =optional.orElseThrow(()->new InfyShoppingCartException("Service.USER_NOT_FOUND"));
+
+      Optional<Product> opt=productRepository.findById(productId);
+      Product product=opt.orElseThrow(()->new InfyShoppingCartException("Service.PRODUCT_NOT_FOUND"));
+      if(product.getStock()<=0) {
+         throw new InfyShoppingCartException("Service.PRODUCT_OUT_OF_STOCK");
+      }
+      user.getCartItems().forEach(c->{
+         if(c.getProduct().getProductId().equals(productId)) {
+            c.setQuantity(c.getQuantity()+1);
+         }
+      });
+      CartItems cartItems=new CartItems();
+      cartItems.setId(1);
+      cartItems.setQuantity(1);
+      cartItems.setProduct(product);
+      CartItems cart= cartItemsRepository.save(cartItems);
+      List<CartItems> cartItems2=user.getCartItems();
+      cartItems2.add(cart);
+      user.setCartItems(cartItems2);
+      User result=userRepository.save(user);
+      return product.getProductName();
+   }
+
+   @Override
+   public List<CartItemsDTO> getCartDetails(Integer userId) throws InfyShoppingCartException {
+      Optional<User> optional=userRepository.findById(userId);
+      User user=optional.orElseThrow(()->new InfyShoppingCartException("Service.USER_NOT_FOUND"));
+      List<CartItems> cartItems=user.getCartItems();
+      if(cartItems.isEmpty()) {
+         throw new InfyShoppingCartException("Service.CART_EMPTY");
+      }
+      List<CartItemsDTO> cartItemsDTOs=new ArrayList<CartItemsDTO>();
+      cartItems.forEach(c->{
+         CartItemsDTO cartItemsDTO=new CartItemsDTO();
+         cartItemsDTO.setId(c.getId());
+         cartItemsDTO.setQuantity(c.getQuantity());
+
+         ProductDTO productDTO=new ProductDTO();
+         productDTO.setPrice(c.getProduct().getPrice());
+         productDTO.setProductId(c.getProduct().getProductId());
+         productDTO.setProductName(c.getProduct().getProductName());
+         cartItemsDTO.setProduct(productDTO);
+         cartItemsDTOs.add(cartItemsDTO);
+      });
+      return cartItemsDTOs;
+   }
+
+}
+
+Api
+
+package com.infy.api;
+
+import java.util.List;
+
+import javax.validation.Valid;
+import javax.validation.constraints.Max;
+import javax.validation.constraints.Min;
+import javax.validation.constraints.Pattern;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.env.Environment;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.infy.dto.CartItemsDTO;
+import com.infy.entity.CartItems;
+import com.infy.exception.InfyShoppingCartException;
+import com.infy.service.InfyShoppingCartService;
+
+@RestController
+@RequestMapping(value = "/infyCart")
+@Validated
+public class InfyShoppingCartAPI {
+   @Autowired
+   private InfyShoppingCartService service;
+   @Autowired
+   private Environment environment;
+
+   @PostMapping(value ="/add/{userId}/{productId}")
+   public ResponseEntity<String> addProductToCart(
+         @Min(value = 1001,message = "{shoppingcart.userid.invalid}")
+   @Max(value = 9999,message = "{shoppingcart.userid.invalid}") @PathVariable Integer userId,
+   @Pattern(regexp = "^INFY_PD[1-9]\\d{3}$",message = "{shoppingcart.productid.invalid}")
+   @PathVariable String productId) throws InfyShoppingCartException{
+         String result=service.addProductToCart(userId, productId);
+         String message=environment.getProperty("API.PRODUCT_ADDED_SUCCESSFULLY");
+         result=result+" <"+message+">";
+      return new ResponseEntity<String>(result,HttpStatus.CREATED);
+   }
+
+   @GetMapping(value ="/get/{userId}")
+   public ResponseEntity<List<CartItemsDTO>> getCartDetails(
+         @Min(value = 1001,message = "{shoppingcart.userid.invalid}")
+   @Max(value = 9999,message = "{shoppingcart.userid.invalid}") @PathVariable Integer userId) throws InfyShoppingCartException {
+
+      List<CartItemsDTO> cartItemsDTOs= service.getCartDetails(userId);
+      return new ResponseEntity<List<CartItemsDTO>>(cartItemsDTOs,HttpStatus.OK);
+   }
+
+}
